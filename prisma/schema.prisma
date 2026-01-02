@@ -1,0 +1,45 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model InventoryItem {
+  id                String    @id
+  name              String
+  price             Int       // in cents
+  priceFormatted    String?
+  sku               String?   @unique
+  code              String?
+  cost              Int?      // in cents
+  stockCount        Int       @default(0)
+  available         Boolean   @default(true)
+  categoryId        String?
+  categoryName      String?
+  tags              String[]  @default([])
+  modifiedTime      BigInt
+  lastSynced        DateTime  @default(now())
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  @@index([categoryId])
+  @@index([stockCount])
+  @@index([available])
+  @@index([tags])
+}
+
+model SyncLog {
+  id            String   @id @default(uuid())
+  startTime     DateTime
+  endTime       DateTime?
+  itemsFetched  Int      @default(0)
+  status        String   // success, error, in_progress
+  error         String?
+  createdAt     DateTime @default(now())
+}
