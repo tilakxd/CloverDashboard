@@ -6,12 +6,20 @@ export interface CloverItem {
   defaultTaxRates?: boolean;
   cost?: number;
   isRevenue?: boolean;
-  stockCount?: number;
+  stockCount?: number; // This is often 0, use itemStock.stockCount instead
   available?: boolean;
   code?: string;
   sku?: string;
   modifiedTime?: number;
   hidden?: boolean;
+  itemStock?: {
+    item: {
+      id: string;
+    };
+    stockCount: number;
+    quantity: number;
+    modifiedTime: number;
+  };
   itemGroup?: {
     id: string;
     name: string;
@@ -66,6 +74,70 @@ export class CloverAPI {
         Authorization: `Bearer ${this.apiKey}`,
         Accept: "application/json",
       },
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(
+        `Clover API error: ${response.status} ${response.statusText} - ${errorText}`
+      );
+    }
+
+    return response.json();
+  }
+
+  private async makePostRequest(
+    endpoint: string,
+    body: any,
+    params: Record<string, string | number> = {}
+  ): Promise<any> {
+    const url = new URL(`${this.baseUrl}/merchants/${this.merchantId}${endpoint}`);
+
+    // Add query parameters
+    Object.entries(params).forEach(([key, value]) => {
+      url.searchParams.append(key, value.toString());
+    });
+
+    const response = await fetch(url.toString(), {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${this.apiKey}`,
+        Accept: "application/json",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(body),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(
+        `Clover API error: ${response.status} ${response.statusText} - ${errorText}`
+      );
+    }
+
+    return response.json();
+  }
+
+  private async makePutRequest(
+    endpoint: string,
+    body: any,
+    params: Record<string, string | number> = {}
+  ): Promise<any> {
+    const url = new URL(`${this.baseUrl}/merchants/${this.merchantId}${endpoint}`);
+
+    // Add query parameters
+    Object.entries(params).forEach(([key, value]) => {
+      url.searchParams.append(key, value.toString());
+    });
+
+    const response = await fetch(url.toString(), {
+      method: "PUT",
+      headers: {
+        Authorization: `Bearer ${this.apiKey}`,
+        Accept: "application/json",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(body),
     });
 
     if (!response.ok) {
@@ -163,6 +235,79 @@ export class CloverAPI {
     } catch (error) {
       console.error("Clover API connection test failed:", error);
       return false;
+    }
+  }
+
+  /**
+   * Fetch items by tag ID with stock expansion
+   */
+  async fetchItemsByTag(tagId: string): Promise<CloverItem[]> {
+    try {
+      // Construct URL manually to log it
+      const url = new URL(`${this.baseUrl}/merchants/${this.merchantId}/tags/${tagId}/items`);
+      url.searchParams.append("limit", "1000");
+      url.searchParams.append("expand", "itemStock");
+      console.log("Fetching items by tag URL:", url.toString());
+      
+      const response = await fetch(url.toString(), {
+        method: "GET",
+        headers: {
+          Authorization: `Bearer ${this.apiKey}`,
+          Accept: "application/json",
+        },
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(
+          `Clover API error: ${response.status} ${response.statusText} - ${errorText}`
+        );
+      }
+
+      const data = await response.json();
+      const items = data.elements || [];
+      
+      // Log first item to debug stock expansion
+      if (items.length > 0) {
+        console.log("Sample item from fetchItemsByTag:", JSON.stringify(items[0], null, 2));
+        console.log("Has itemStock?", "itemStock" in items[0]);
+        console.log("itemStock.stockCount:", items[0].itemStock?.stockCount);
+        console.log("Root stockCount:", items[0].stockCount);
+      }
+      
+      return items;
+    } catch (error) {
+      console.error(`Error fetching items for tag ${tagId}:`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * Add a tag to an item
+   */
+  async addTagToItem(itemId: string, tagId: string): Promise<void> {
+    try {
+      await this.makePostRequest(`/items/${itemId}/tags/${tagId}`, {});
+    } catch (error) {
+      console.error(`Error adding tag ${tagId} to item ${itemId}:`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * Update item stock count
+   */
+  async updateItemStock(itemId: string, stockCount: number): Promise<CloverItem> {
+    try {
+      const response = await this.makePutRequest(
+        `/items/${itemId}`,
+        { stockCount },
+        {}
+      );
+      return response as CloverItem;
+    } catch (error) {
+      console.error(`Error updating stock for item ${itemId}:`, error);
+      throw error;
     }
   }
 }

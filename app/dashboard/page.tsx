@@ -5,7 +5,10 @@ import { FilterBar, type FilterValues } from "@/components/FilterBar";
 import { StatsCards } from "@/components/StatsCards";
 import { SyncStatus } from "@/components/SyncStatus";
 import { ItemsTable, type ItemsTableRef } from "@/components/ItemsTable";
+import { AddInventoryModal } from "@/components/AddInventoryModal";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Button } from "@/components/ui/button";
+import { Plus } from "lucide-react";
 
 interface Category {
   id: string;
@@ -56,6 +59,7 @@ export default function DashboardPage() {
     available: "",
     tag: "all",
   });
+  const [inventoryModalOpen, setInventoryModalOpen] = useState(false);
   const itemsTableRef = useRef<ItemsTableRef>(null);
 
   const fetchTags = async () => {
@@ -163,13 +167,19 @@ export default function DashboardPage() {
       <div className="container mx-auto p-4 md:p-8">
         <div className="space-y-6">
           {/* Header */}
-          <div>
-            <h1 className="text-3xl font-bold tracking-tight">
-              Inventory Dashboard
-            </h1>
-            <p className="text-muted-foreground">
-              Manage your Clover inventory items
-            </p>
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-3xl font-bold tracking-tight">
+                Inventory Dashboard
+              </h1>
+              <p className="text-muted-foreground">
+                Manage your Clover inventory items
+              </p>
+            </div>
+            <Button onClick={() => setInventoryModalOpen(true)}>
+              <Plus className="mr-2 h-4 w-4" />
+              Add Inventory
+            </Button>
           </div>
 
           {/* Sync Status */}
@@ -192,6 +202,18 @@ export default function DashboardPage() {
             filters={filters}
             onStatsUpdate={handleStatsUpdate}
             onCategoriesUpdate={handleCategoriesUpdate}
+          />
+
+          {/* Add Inventory Modal */}
+          <AddInventoryModal
+            open={inventoryModalOpen}
+            onOpenChange={setInventoryModalOpen}
+            tags={tags}
+            onComplete={() => {
+              if (itemsTableRef.current) {
+                itemsTableRef.current.refresh();
+              }
+            }}
           />
         </div>
       </div>
