@@ -1,5 +1,6 @@
 "use client";
 
+import { memo } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatCurrency } from "@/lib/utils";
 import { Package, DollarSign, AlertCircle, XCircle } from "lucide-react";
@@ -14,7 +15,7 @@ interface StatsCardsProps {
   };
 }
 
-export function StatsCards({ stats }: StatsCardsProps) {
+export const StatsCards = memo(function StatsCards({ stats }: StatsCardsProps) {
   return (
     <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
       <Card>
@@ -69,5 +70,5 @@ export function StatsCards({ stats }: StatsCardsProps) {
       </Card>
     </div>
   );
-}
+});
 

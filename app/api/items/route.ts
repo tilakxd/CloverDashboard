@@ -18,7 +18,7 @@ export async function GET(request: Request) {
     const tag = searchParams.get("tag") || "";
 
     // Build where clause
-    const where: Prisma.InventoryItemWhereInput = {};
+    const where: any = {};
 
     // Search filter (name or SKU)
     if (search) {
@@ -39,6 +39,8 @@ export async function GET(request: Request) {
       where.stockCount = { gt: 10 };
     } else if (stockStatus === "low-stock") {
       where.stockCount = { gt: 0, lte: 10 };
+    } else if (stockStatus === "less-than-5") {
+      where.stockCount = { lt: 5 }; // Includes 0, 1, 2, 3, 4
     } else if (stockStatus === "out-of-stock") {
       where.stockCount = { lte: 0 };
     }
@@ -67,15 +69,25 @@ export async function GET(request: Request) {
       };
     }
 
+    // Pagination
+    const page = parseInt(searchParams.get("page") || "1");
+    const limit = parseInt(searchParams.get("limit") || "50");
+    const skip = (page - 1) * limit;
+
     // Execute all queries in parallel for better performance
-    const [items, categories, stats, lowStockCount, outOfStockCount] = await Promise.all([
-      // Fetch items with filters
+    const [items, totalCount, categories, stats, lowStockCount, outOfStockCount] = await Promise.all([
+      // Fetch items with filters and pagination
       prisma.inventoryItem.findMany({
         where,
         orderBy: {
           name: "asc",
         },
+        skip,
+        take: limit,
       }),
+      
+      // Get total count for pagination
+      prisma.inventoryItem.count({ where }),
       
       // Get all unique categories for filter dropdown
       prisma.inventoryItem.findMany({
@@ -117,11 +129,11 @@ export async function GET(request: Request) {
     ]);
 
     return NextResponse.json({
-      items: items.map((item) => ({
+      items: items.map((item: any) => ({
         ...item,
         modifiedTime: item.modifiedTime.toString(),
       })),
-      categories: categories.map((cat) => ({
+      categories: categories.map((cat: any) => ({
         id: cat.categoryId,
         name: cat.categoryName,
       })),
@@ -131,6 +143,12 @@ export async function GET(request: Request) {
         totalValue: stats._sum.price || 0,
         lowStockCount,
         outOfStockCount,
+      },
+      pagination: {
+        page,
+        limit,
+        total: totalCount,
+        totalPages: Math.ceil(totalCount / limit),
       },
     });
   } catch (error) {

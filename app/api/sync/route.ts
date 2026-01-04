@@ -15,6 +15,7 @@ export async function POST(request: Request) {
     });
 
     let itemsFetched = 0;
+    let itemsDeleted = 0;
     let error: string | null = null;
 
     try {
@@ -24,6 +25,9 @@ export async function POST(request: Request) {
       // Fetch all items from Clover
       const items = await cloverClient.fetchAllItems();
       itemsFetched = items.length;
+
+      // Create a set of item IDs from Clover for efficient lookup
+      const cloverItemIds = new Set(items.map(item => item.id));
 
       // Upsert items into database
       for (const item of items) {
@@ -92,6 +96,26 @@ export async function POST(request: Request) {
         });
       }
 
+      // Delete items that exist in database but not in Clover
+      const allDbItems = await prisma.inventoryItem.findMany({
+        select: { id: true },
+      });
+
+      const itemsToDelete = allDbItems.filter(dbItem => !cloverItemIds.has(dbItem.id));
+      
+      if (itemsToDelete.length > 0) {
+        const idsToDelete = itemsToDelete.map(item => item.id);
+        await prisma.inventoryItem.deleteMany({
+          where: {
+            id: {
+              in: idsToDelete,
+            },
+          },
+        });
+        itemsDeleted = itemsToDelete.length;
+        console.log(`Deleted ${itemsDeleted} items that no longer exist in Clover`);
+      }
+
       // Update sync log with success
       await prisma.syncLog.update({
         where: { id: syncLog.id },
@@ -104,8 +128,9 @@ export async function POST(request: Request) {
 
       return NextResponse.json({
         success: true,
-        message: `Successfully synced ${itemsFetched} items`,
+        message: `Successfully synced ${itemsFetched} items${itemsDeleted > 0 ? ` and deleted ${itemsDeleted} removed items` : ""}`,
         itemsFetched,
+        itemsDeleted,
         syncId: syncLog.id,
       });
     } catch (err) {

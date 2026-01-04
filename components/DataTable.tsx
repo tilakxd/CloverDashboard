@@ -1,5 +1,6 @@
 "use client";
 
+import { memo } from "react";
 import {
   Table,
   TableBody,
@@ -34,7 +35,7 @@ interface DataTableProps {
   items: InventoryItem[];
 }
 
-export function DataTable({ items }: DataTableProps) {
+export const DataTable = memo(function DataTable({ items }: DataTableProps) {
   const getStockBadge = (stockCount: number) => {
     if (stockCount <= 0) {
       return <Badge variant="destructive">Out of Stock</Badge>;
@@ -67,6 +68,7 @@ export function DataTable({ items }: DataTableProps) {
             <TableHead>Tags</TableHead>
             <TableHead className="text-right">Price</TableHead>
             <TableHead className="text-right">Cost</TableHead>
+            <TableHead className="text-right">Profit Margin</TableHead>
             <TableHead className="text-center">Stock</TableHead>
             <TableHead className="text-center">Status</TableHead>
             <TableHead>Last Updated</TableHead>
@@ -105,6 +107,11 @@ export function DataTable({ items }: DataTableProps) {
               <TableCell className="text-right text-muted-foreground">
                 {item.cost ? formatCurrency(item.cost) : "-"}
               </TableCell>
+              <TableCell className="text-right font-medium">
+                {item.cost && item.cost > 0
+                  ? `${(((item.price - item.cost) / item.price) * 100).toFixed(1)}%`
+                  : "-"}
+              </TableCell>
               <TableCell className="text-center font-medium">
                 {item.stockCount}
               </TableCell>
@@ -120,5 +127,5 @@ export function DataTable({ items }: DataTableProps) {
       </Table>
     </div>
   );
-}
+});
 

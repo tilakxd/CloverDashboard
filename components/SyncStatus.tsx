@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, memo } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { RefreshCw, CheckCircle, AlertCircle } from "lucide-react";
@@ -19,7 +19,7 @@ interface SyncStatusProps {
   onSync: () => Promise<void>;
 }
 
-export function SyncStatus({ lastSync, onSync }: SyncStatusProps) {
+export const SyncStatus = memo(function SyncStatus({ lastSync, onSync }: SyncStatusProps) {
   const [syncing, setSyncing] = useState(false);
 
   const handleSync = async () => {
@@ -73,5 +73,5 @@ export function SyncStatus({ lastSync, onSync }: SyncStatusProps) {
       </CardContent>
     </Card>
   );
-}
+});
 
