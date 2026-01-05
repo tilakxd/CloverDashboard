@@ -2,6 +2,16 @@
 
 This guide covers deploying the Clover Dashboard to various platforms.
 
+## Auto-Deployment Overview
+
+**Does pushing to master automatically update the deployed app?**
+
+- ✅ **Vercel/Railway**: YES - Automatically deploys when you push to the connected branch
+- ❌ **VPS (Manual)**: NO - Requires manual update or CI/CD setup
+- ✅ **VPS (with GitHub Actions)**: YES - Can be configured for auto-deployment
+
+See the [VPS Auto-Deployment](#auto-deployment-options) section below for setup instructions.
+
 ## Vercel (Recommended)
 
 Vercel is the easiest way to deploy Next.js applications.
@@ -102,6 +112,8 @@ Add all required environment variables in the Railway dashboard.
 5. **Deploy**:
 
 Railway will automatically build and deploy your app.
+
+**Auto-Deploy**: Railway automatically deploys when you push to the connected branch. No manual intervention needed.
 
 ## Docker Deployment
 
@@ -496,6 +508,10 @@ sudo systemctl status clover-dashboard
 
 ### Updating the Application
 
+**Important**: Pushing to `master` does NOT automatically update your VPS deployment. You need to manually update.
+
+#### Manual Update Process
+
 When you need to update:
 
 ```bash
@@ -519,6 +535,120 @@ pm2 restart clover-dashboard
 # Or with systemd
 sudo systemctl restart clover-dashboard
 ```
+
+#### Auto-Deployment Options
+
+**Option 1: GitHub Actions (Recommended)**
+
+Set up automatic deployment when you push to master:
+
+1. **Create GitHub Actions workflow**:
+```bash
+mkdir -p .github/workflows
+nano .github/workflows/deploy.yml
+```
+
+Add this configuration:
+```yaml
+name: Deploy to VPS
+
+on:
+  push:
+    branches: [ master ]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Deploy to server
+      uses: appleboy/ssh-action@master
+      with:
+        host: ${{ secrets.VPS_HOST }}
+        username: ${{ secrets.VPS_USER }}
+        key: ${{ secrets.VPS_SSH_KEY }}
+        script: |
+          cd ~/CloverDashboard
+          git pull origin master
+          npm install
+          npx prisma migrate deploy
+          npm run build
+          pm2 restart clover-dashboard
+```
+
+2. **Add GitHub Secrets**:
+   - Go to your GitHub repo → Settings → Secrets and variables → Actions
+   - Add these secrets:
+     - `VPS_HOST`: Your VPS IP or domain
+     - `VPS_USER`: Your SSH username (e.g., `clover`)
+     - `VPS_SSH_KEY`: Your private SSH key (generate with `ssh-keygen`)
+
+3. **Set up SSH key on VPS**:
+```bash
+# On your VPS, add the public key to authorized_keys
+mkdir -p ~/.ssh
+nano ~/.ssh/authorized_keys
+# Paste your public key here
+chmod 600 ~/.ssh/authorized_keys
+chmod 700 ~/.ssh
+```
+
+**Option 2: Webhook Script**
+
+Create a simple webhook endpoint that triggers deployment:
+
+1. **Create deployment script**:
+```bash
+nano ~/deploy.sh
+```
+
+Add:
+```bash
+#!/bin/bash
+cd ~/CloverDashboard
+git pull origin master
+npm install
+npx prisma migrate deploy
+npm run build
+pm2 restart clover-dashboard
+echo "Deployment completed at $(date)"
+```
+
+Make executable:
+```bash
+chmod +x ~/deploy.sh
+```
+
+2. **Set up webhook** (using a simple Node.js server or GitHub webhook):
+   - GitHub can send webhooks to your server
+   - Server receives webhook and runs `~/deploy.sh`
+
+**Option 3: Cron Job (Polling)**
+
+Set up a cron job that checks for updates every few minutes:
+
+```bash
+crontab -e
+```
+
+Add:
+```bash
+*/5 * * * * cd ~/CloverDashboard && git fetch && [ $(git rev-parse HEAD) != $(git rev-parse origin/master) ] && git pull origin master && npm install && npx prisma migrate deploy && npm run build && pm2 restart clover-dashboard
+```
+
+**Note**: This checks every 5 minutes. Adjust timing as needed.
+
+### Auto-Deployment Comparison
+
+| Method | Auto-Deploy? | Setup Complexity | Best For |
+|--------|-------------|------------------|----------|
+| **VPS Manual** | ❌ No | Easy | Single developer, infrequent updates |
+| **GitHub Actions** | ✅ Yes | Medium | Teams, CI/CD pipeline |
+| **Webhook** | ✅ Yes | Medium | Custom automation |
+| **Cron Polling** | ✅ Yes (delayed) | Easy | Simple auto-updates |
+| **Vercel/Railway** | ✅ Yes | Very Easy | Managed hosting |
+
+**Recommendation**: Use GitHub Actions for VPS auto-deployment. It's reliable, secure, and integrates well with your workflow.
 
 ### Backup Strategy
 
