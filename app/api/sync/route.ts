@@ -59,6 +59,9 @@ export async function POST(request: Request) {
           }
         }
 
+        // Use itemStock.stockCount if available, otherwise fall back to stockCount
+        const actualStockCount = item.itemStock?.stockCount ?? item.stockCount ?? 0;
+
         await prisma.inventoryItem.upsert({
           where: { id: item.id },
           update: {
@@ -68,7 +71,7 @@ export async function POST(request: Request) {
             sku: item.sku || null,
             code: item.code || null,
             cost: item.cost || null,
-            stockCount: item.stockCount || 0,
+            stockCount: actualStockCount,
             available: item.available ?? true,
             categoryId: categoryId,
             categoryName: categoryName,
@@ -85,7 +88,7 @@ export async function POST(request: Request) {
             sku: item.sku || null,
             code: item.code || null,
             cost: item.cost || null,
-            stockCount: item.stockCount || 0,
+            stockCount: actualStockCount,
             available: item.available ?? true,
             categoryId: categoryId,
             categoryName: categoryName,

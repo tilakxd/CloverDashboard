@@ -98,6 +98,9 @@ export class CloverAPI {
       url.searchParams.append(key, value.toString());
     });
 
+    console.log(`[makePostRequest] URL:`, url.toString());
+    console.log(`[makePostRequest] Body:`, JSON.stringify(body, null, 2));
+
     const response = await fetch(url.toString(), {
       method: "POST",
       headers: {
@@ -110,6 +113,11 @@ export class CloverAPI {
 
     if (!response.ok) {
       const errorText = await response.text();
+      console.error(`[makePostRequest] Error response:`, {
+        status: response.status,
+        statusText: response.statusText,
+        body: errorText
+      });
       throw new Error(
         `Clover API error: ${response.status} ${response.statusText} - ${errorText}`
       );
@@ -130,14 +138,21 @@ export class CloverAPI {
       url.searchParams.append(key, value.toString());
     });
 
+    const headers: HeadersInit = {
+      Authorization: `Bearer ${this.apiKey}`,
+      Accept: "application/json",
+    };
+
+    // Only include Content-Type and body if body is not empty
+    const hasBody = body && Object.keys(body).length > 0;
+    if (hasBody) {
+      headers["Content-Type"] = "application/json";
+    }
+
     const response = await fetch(url.toString(), {
       method: "PUT",
-      headers: {
-        Authorization: `Bearer ${this.apiKey}`,
-        Accept: "application/json",
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(body),
+      headers,
+      body: hasBody ? JSON.stringify(body) : undefined,
     });
 
     if (!response.ok) {
@@ -165,7 +180,7 @@ export class CloverAPI {
         const response = await this.makeRequest("/items", {
           limit,
           offset,
-          expand: "categories,tags",
+          expand: "categories,tags,itemStock",
         });
 
         const items = response.elements || [];
@@ -284,10 +299,26 @@ export class CloverAPI {
 
   /**
    * Add a tag to an item
+   * Route: /tag_items
+   * Method: POST
+   * Body: { elements: [{ tag: {id: tagId}, item: {id: itemId} }] }
    */
   async addTagToItem(itemId: string, tagId: string): Promise<void> {
     try {
-      await this.makePostRequest(`/items/${itemId}/tags/${tagId}`, {});
+      const body = {
+        elements: [
+          {
+            tag: { id: tagId },
+            item: { id: itemId }
+          }
+        ]
+      };
+      
+      console.log(`[addTagToItem] Request body:`, JSON.stringify(body, null, 2));
+      
+      // Clover API uses POST to /tag_items with elements array
+      const result = await this.makePostRequest(`/tag_items`, body);
+      console.log(`[addTagToItem] Success:`, result);
     } catch (error) {
       console.error(`Error adding tag ${tagId} to item ${itemId}:`, error);
       throw error;
@@ -295,16 +326,55 @@ export class CloverAPI {
   }
 
   /**
-   * Update item stock count
+   * Update item stock count using item_stocks endpoint
+   * Includes retry logic for rate limiting
    */
-  async updateItemStock(itemId: string, stockCount: number): Promise<CloverItem> {
+  async updateItemStock(itemId: string, stockCount: number, retries: number = 3): Promise<void> {
     try {
-      const response = await this.makePutRequest(
-        `/items/${itemId}`,
-        { stockCount },
-        {}
-      );
-      return response as CloverItem;
+      const url = new URL(`${this.baseUrl}/merchants/${this.merchantId}/item_stocks/${itemId}`);
+      
+      const response = await fetch(url.toString(), {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${this.apiKey}`,
+          Accept: "application/json",
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ quantity: stockCount }),
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        
+        // Handle rate limiting (429) with retry
+        if (response.status === 429 && retries > 0) {
+          const waitTime = (4 - retries) * 2000; // Exponential backoff: 2s, 4s, 6s
+          console.log(`Rate limited, waiting ${waitTime}ms before retry (${retries} retries left)...`);
+          await new Promise((resolve) => setTimeout(resolve, waitTime));
+          return this.updateItemStock(itemId, stockCount, retries - 1);
+        }
+        
+        // Handle 400 (Bad Request) - might be invalid data
+        if (response.status === 400) {
+          throw new Error(
+            `Bad Request: Invalid stock count or item ID. ${errorText}`
+          );
+        }
+        
+        // Handle 500 (Server Error) - Clover API issue
+        if (response.status === 500) {
+          throw new Error(
+            `Clover API server error. Please try again later. ${errorText}`
+          );
+        }
+        
+        throw new Error(
+          `Clover API error: ${response.status} ${response.statusText} - ${errorText}`
+        );
+      }
+
+      // item_stocks endpoint doesn't return the item, just success
+      return;
     } catch (error) {
       console.error(`Error updating stock for item ${itemId}:`, error);
       throw error;

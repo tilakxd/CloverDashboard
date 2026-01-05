@@ -156,10 +156,10 @@ export function AddInventoryModal({
     });
   };
 
-  const fetchItemsByTag = async () => {
+  const fetchItemsByTag = async (): Promise<CloverItem[]> => {
     if (!selectedTagId) {
       setError("Please select a vendor");
-      return;
+      return [];
     }
 
     setLoading(true);
@@ -179,14 +179,16 @@ export function AddInventoryModal({
       }
       
       setCloverItems(items);
+      return items;
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to fetch items");
+      return [];
     } finally {
       setLoading(false);
     }
   };
 
-  const findMissingItems = async () => {
+  const findMissingItems = async (itemsWithTag?: CloverItem[]) => {
     if (!selectedTagId || csvData.length === 0) {
       setError("Please select a vendor and upload a CSV file");
       return;
@@ -201,6 +203,9 @@ export function AddInventoryModal({
       setError("Please select Name column");
       return;
     }
+
+    // Use provided items or fall back to state
+    const items = itemsWithTag || cloverItems;
 
     setLoading(true);
     setError(null);
@@ -224,13 +229,12 @@ export function AddInventoryModal({
       const data = await response.json();
       const missingItemsFromApi = data.items || [];
       
-      // Filter out items that are now in cloverItems (they have the tag)
-      const missingItemIds = new Set(missingItemsFromApi.map((item: MissingItem) => item.id));
-      const itemsWithTag = cloverItems.map(item => item.id);
+      // Filter out items that are now in items (they have the tag)
+      const itemsWithTagIds = items.map(item => item.id);
       
-      // Only show items that are truly missing (not in the cloverItems list)
+      // Only show items that are truly missing (not in the items list)
       const trulyMissing = missingItemsFromApi.filter((item: MissingItem) => 
-        !itemsWithTag.includes(item.id)
+        !itemsWithTagIds.includes(item.id)
       );
       
       setMissingItems(trulyMissing);
@@ -241,8 +245,14 @@ export function AddInventoryModal({
     }
   };
 
+  const [addingTagToItemId, setAddingTagToItemId] = useState<string | null>(null);
+
   const addTagToItem = async (itemId: string) => {
     if (!selectedTagId) return;
+
+    setAddingTagToItemId(itemId);
+    setError(null);
+    setSuccess(null);
 
     try {
       const response = await fetch("/api/inventory/add-tag", {
@@ -251,22 +261,47 @@ export function AddInventoryModal({
         body: JSON.stringify({ itemId, tagId: selectedTagId }),
       });
 
-      if (!response.ok) throw new Error("Failed to add tag");
-
-      // Refresh items by tag first to get updated list
-      await fetchItemsByTag();
-      
-      // Then re-check for missing items to update the list
-      if (csvData.length > 0 && (referenceMethod === "upc" ? upcColumn : nameColumn)) {
-        await findMissingItems();
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.message || errorData.error || "Failed to add tag");
       }
+
+      const data = await response.json();
+      
+      // Remove the item from missingItems immediately for better UX
+      setMissingItems(prev => prev.filter(item => item.id !== itemId));
+
+      // Refresh items by tag to get updated list (this will update cloverItems)
+      const refreshedItems = await fetchItemsByTag();
+      
+      // Re-check for missing items to refresh the list using fresh items
+      if (csvData.length > 0 && (referenceMethod === "upc" ? upcColumn : nameColumn)) {
+        await findMissingItems(refreshedItems);
+      }
+
+      // Re-run matching with fresh items to update matchedItems and unmatchedItems
+      // This will move the newly tagged item from unmatched to matched if it matches CSV
+      if (csvData.length > 0 && refreshedItems.length > 0 && 
+          (referenceMethod === "upc" ? upcColumn : nameColumn)) {
+        await matchItems(refreshedItems);
+      }
+
+      setSuccess(`Tag added successfully! Item will now appear in the vendor list.`);
+      
+      // Clear success message after 3 seconds
+      setTimeout(() => setSuccess(null), 3000);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to add tag");
+    } finally {
+      setAddingTagToItemId(null);
     }
   };
 
-  const matchItems = async () => {
-    if (!selectedTagId || csvData.length === 0 || cloverItems.length === 0) {
+  const matchItems = async (itemsToMatch?: CloverItem[]) => {
+    // Use provided items or fall back to state
+    const items = itemsToMatch || cloverItems;
+    
+    if (!selectedTagId || csvData.length === 0 || items.length === 0) {
       setError("Please fetch items by tag first");
       return;
     }
@@ -295,7 +330,7 @@ export function AddInventoryModal({
         continue;
       }
 
-      let item = cloverItems.find((item) => {
+      let item = items.find((item) => {
         if (referenceMethod === "upc") {
           // First try matching against SKU
           return item.sku?.trim() === searchValue;
@@ -308,7 +343,7 @@ export function AddInventoryModal({
 
       // If UPC didn't match SKU, try matching against code
       if (!item && referenceMethod === "upc") {
-        item = cloverItems.find((item) => {
+        item = items.find((item) => {
           return item.code?.trim() === searchValue;
         });
       }
@@ -361,8 +396,11 @@ export function AddInventoryModal({
 
     let successCount = 0;
     let errorCount = 0;
+    const errors: Array<{ itemId: string; itemName: string; error: string }> = [];
+    const successes: Array<{ itemId: string; itemName: string; currentStock: number; addedStock: number; newStock: number }> = [];
 
-    for (const matched of matchedItems) {
+    for (let i = 0; i < matchedItems.length; i++) {
+      const matched = matchedItems[i];
       try {
         const response = await fetch("/api/inventory/update-stock", {
           method: "POST",
@@ -373,11 +411,40 @@ export function AddInventoryModal({
           }),
         });
 
-        if (!response.ok) throw new Error("Failed to update stock");
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({}));
+          const errorMessage = errorData.message || errorData.error || `HTTP ${response.status}`;
+          throw new Error(errorMessage);
+        }
         successCount++;
+        successes.push({
+          itemId: matched.item.id,
+          itemName: matched.item.name,
+          currentStock: matched.currentStock,
+          addedStock: matched.calculatedStock,
+          newStock: matched.newStock,
+        });
+        
+        // Add delay between requests to avoid rate limiting (429 errors)
+        // Wait 200ms between requests to be safer, except for the last one
+        if (i < matchedItems.length - 1) {
+          await new Promise((resolve) => setTimeout(resolve, 200));
+        }
       } catch (err) {
+        const errorMessage = err instanceof Error ? err.message : "Unknown error";
         console.error(`Failed to update stock for item ${matched.item.id}:`, err);
         errorCount++;
+        errors.push({
+          itemId: matched.item.id,
+          itemName: matched.item.name,
+          error: errorMessage,
+        });
+        
+        // If we get a 429 error, wait longer before continuing
+        if (err instanceof Error && (err.message.includes("429") || err.message.includes("Too Many Requests"))) {
+          console.log("Rate limited, waiting 3 seconds before continuing...");
+          await new Promise((resolve) => setTimeout(resolve, 3000));
+        }
       }
     }
 
@@ -390,7 +457,25 @@ export function AddInventoryModal({
         if (onComplete) onComplete();
       }, 2000);
     } else {
-      setError(`Updated ${successCount} items, ${errorCount} failed`);
+      // Build detailed success and error messages
+      const successDetails = successes.map(s => 
+        `${s.itemName}: ${s.currentStock} → ${s.newStock} (+${s.addedStock})`
+      ).join("\n");
+      
+      const errorDetails = errors.map(e => 
+        `${e.itemName}: ${e.error}`
+      ).join("\n");
+      
+      const fullMessage = `Updated ${successCount} items successfully:\n${successDetails}\n\nFailed ${errorCount} items:\n${errorDetails}`;
+      
+      // Store in error state but format it nicely
+      setError(fullMessage);
+      
+      // Also log to console for easy copy-paste
+      console.log("=== SUCCESSFULLY UPDATED ===");
+      console.log(successDetails);
+      console.log("\n=== FAILED TO UPDATE ===");
+      console.log(errorDetails);
     }
   };
 
@@ -678,8 +763,16 @@ export function AddInventoryModal({
                             <Button
                               size="sm"
                               onClick={() => addTagToItem(item.id)}
+                              disabled={addingTagToItemId === item.id || !!addingTagToItemId}
                             >
-                              Add Tag
+                              {addingTagToItemId === item.id ? (
+                                <>
+                                  <Loader2 className="mr-2 h-3 w-3 animate-spin" />
+                                  Adding...
+                                </>
+                              ) : (
+                                "Add Tag"
+                              )}
                             </Button>
                           </TableCell>
                         </TableRow>
@@ -783,10 +876,19 @@ export function AddInventoryModal({
 
           {/* Error/Success Messages */}
           {error && (
-            <div className="flex items-center gap-2 text-destructive">
-              <AlertCircle className="h-4 w-4" />
-              <span className="text-sm">{error}</span>
-            </div>
+            <Card className="border-orange-200 bg-orange-50 dark:bg-orange-950/20">
+              <CardContent className="pt-6">
+                <div className="space-y-4">
+                  <div className="flex items-center gap-2 text-orange-800 dark:text-orange-200">
+                    <AlertCircle className="h-4 w-4" />
+                    <span className="font-semibold">Update Results</span>
+                  </div>
+                  <div className="text-sm whitespace-pre-line text-orange-700 dark:text-orange-300 font-mono">
+                    {error}
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
           )}
           {success && (
             <div className="flex items-center gap-2 text-green-600">
