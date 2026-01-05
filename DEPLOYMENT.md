@@ -55,6 +55,7 @@ NEXTAUTH_URL=https://your-app.vercel.app
    - Click "Deploy"
    - Vercel will build and deploy your application
    - Your app will be live at `https://your-app.vercel.app`
+   - **Auto-Deploy**: Every push to the connected branch will automatically trigger a new deployment
 
 5. **Run Database Migrations**:
 
