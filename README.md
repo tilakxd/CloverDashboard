@@ -6,7 +6,6 @@ A modern Next.js dashboard for managing Clover inventory items with real-time sy
 
 - 📊 Real-time inventory data from Clover API
 - 🗄️ PostgreSQL database caching for fast performance
-- 🔒 Simple password authentication
 - 🎨 Beautiful UI with shadcn/ui components
 - 🔍 Advanced filtering (search, category, stock status, price range, tags)
 - 📱 Responsive design
@@ -37,8 +36,6 @@ Required variables:
 - `DATABASE_URL`: Your PostgreSQL connection string
 - `CLOVER_MERCHANT_ID`: Your Clover merchant ID
 - `CLOVER_API_KEY`: Your Clover API key
-- `DASHBOARD_PASSWORD`: Password to access the dashboard
-- `NEXTAUTH_SECRET`: Generate with `openssl rand -base64 32`
 
 ### 3. Set Up Database
 
@@ -64,7 +61,7 @@ Visit [http://localhost:3000](http://localhost:3000) to access the dashboard.
 
 ### 6. Initial Sync
 
-After logging in, click the "Sync Now" button to fetch all inventory items from Clover.
+Click the "Sync Now" button to fetch all inventory items from Clover.
 
 **Note**: The sync process now uses `expand=itemStock` to get accurate stock counts. The stock count is read from `itemStock.stockCount` when available, falling back to the top-level `stockCount` field.
 
@@ -95,7 +92,6 @@ The system now properly handles Clover's stock count structure:
 ```
 /app
   /api
-    /auth/[...nextauth]        # Authentication endpoints
     /sync                      # Sync inventory from Clover
     /items                     # Fetch items with filtering
     /tags                      # Fetch tags from Clover API
@@ -105,7 +101,6 @@ The system now properly handles Clover's stock count structure:
       /find-missing-items      # Find items missing tags
       /update-stock            # Update item stock count
   /dashboard                   # Main dashboard page
-  /login                       # Login page
 /components
   /ui                          # shadcn/ui components
   DataTable.tsx               # Inventory data table
@@ -117,7 +112,6 @@ The system now properly handles Clover's stock count structure:
 /lib
   clover.ts                    # Clover API client
   prisma.ts                    # Prisma client
-  auth.ts                      # Auth configuration
   vendor-configs.ts            # Vendor stock calculation configs
 /prisma
   schema.prisma                # Database schema
@@ -128,7 +122,6 @@ The system now properly handles Clover's stock count structure:
 - **Framework**: Next.js 14 (App Router)
 - **Database**: PostgreSQL with Prisma ORM
 - **UI**: shadcn/ui + Tailwind CSS
-- **Auth**: NextAuth.js v5
 - **API**: Clover REST API v3
 
 ## API Endpoints
@@ -140,7 +133,6 @@ The system now properly handles Clover's stock count structure:
 - `GET /api/inventory/items-by-tag` - Fetch items by tag ID with stock expansion
 - `POST /api/inventory/find-missing-items` - Find items in database that don't have a specific tag
 - `POST /api/inventory/update-stock` - Update stock count for an item
-- `POST /api/auth/*` - Authentication endpoints
 
 ## Deployment
 
