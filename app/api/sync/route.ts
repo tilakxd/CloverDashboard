@@ -2,6 +2,29 @@ import { NextResponse } from "next/server";
 import { createCloverClient, type CloverItem } from "@/lib/clover";
 import { prisma } from "@/lib/prisma";
 
+interface SyncStats {
+  itemsFetched: number;
+  itemsDeleted: number;
+  error: string | null;
+}
+
+interface SyncResponse {
+  success: boolean;
+  message: string;
+  itemsFetched: number;
+  itemsDeleted: number;
+  syncId: string;
+}
+
+interface ErrorResponse {
+  success: false;
+  message: string;
+}
+
+interface DbItem {
+  id: string;
+}
+
 export const dynamic = "force-dynamic";
 
 export async function POST(request: Request) {
@@ -104,10 +127,10 @@ export async function POST(request: Request) {
         select: { id: true },
       });
 
-      const itemsToDelete = allDbItems.filter(dbItem => !cloverItemIds.has(dbItem.id));
+      const itemsToDelete = allDbItems.filter((dbItem: DbItem) => !cloverItemIds.has(dbItem.id));
       
       if (itemsToDelete.length > 0) {
-        const idsToDelete = itemsToDelete.map(item => item.id);
+        const idsToDelete = itemsToDelete.map((item: DbItem) => item.id);
         await prisma.inventoryItem.deleteMany({
           where: {
             id: {

@@ -24,6 +24,10 @@ interface Tag {
   name: string;
 }
 
+interface Tags {
+  tags: Tag[];
+}
+
 interface InventoryItem {
   id: string;
   name: string;
@@ -173,19 +177,31 @@ export function FilterBar({ categories, tags, filters, onFilterChange }: FilterB
           ? (((item.price - item.cost) / item.price) * 100).toFixed(2)
           : "";
         
-        const tags = item.tags && item.tags.length > 0
-          ? item.tags.map(tagId => {
-              const tag = tags.find(t => t.id === tagId);
-              return tag ? tag.name : tagId.split('_').pop() || tagId;
-            }).join("; ")
-          : "";
+        // const tagsString: string = item.tags && item.tags.length > 0
+        //   ? item.tags.map((tagId: string) => {
+        //       const tag = tags.find(t => t.id === tagId);
+        //       return tag ? tag.name : tagId.split('_').pop() || tagId;
+        //     }).join("; ")
+        //   : "";
+        const tagNames =
+  item.tags && item.tags.length > 0
+    ? item.tags
+        .map((tagId: string) => {
+          const matchedTag = tags.find((t: Tag) => t.id === tagId);
+          return matchedTag
+            ? matchedTag.name
+            : tagId.split("_").pop() || tagId;
+        })
+        .join("; ")
+    : "";
+
 
         return [
           `"${item.name.replace(/"/g, '""')}"`,
           `"${item.sku || ""}"`,
           `"${item.code || ""}"`,
           `"${item.categoryName || ""}"`,
-          `"${tags.replace(/"/g, '""')}"`,
+          `"${tagNames.replace(/"/g, '""')}"`,
           (item.price / 100).toFixed(2),
           item.cost ? (item.cost / 100).toFixed(2) : "",
           profitMargin,
