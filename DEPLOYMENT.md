@@ -1,6 +1,6 @@
-# VPS Deployment Guide
+# VPS Deployment Guide with Nginx
 
-Complete guide for deploying Clover Dashboard on a VPS (Virtual Private Server) like DigitalOcean, Linode, AWS EC2, or any Ubuntu/Debian server.
+Complete guide for deploying Clover Dashboard on a VPS (Virtual Private Server) using Nginx as a reverse proxy.
 
 ## Prerequisites
 
@@ -12,12 +12,17 @@ Complete guide for deploying Clover Dashboard on a VPS (Virtual Private Server) 
 
 ## Step 1: Initial Server Setup
 
-1. **Update system packages**:
+1. **SSH into your server**:
+```bash
+ssh user@your-server-ip
+```
+
+2. **Update system packages**:
 ```bash
 sudo apt update && sudo apt upgrade -y
 ```
 
-2. **Create a non-root user** (if not already done):
+3. **Create a non-root user** (if not already done):
 ```bash
 sudo adduser clover
 sudo usermod -aG sudo clover
@@ -133,7 +138,7 @@ pm2 stop clover-dashboard     # Stop app
 pm2 monit              # Monitor resources
 ```
 
-## Step 9: Set Up Nginx (Reverse Proxy)
+## Step 9: Install and Configure Nginx
 
 ```bash
 # Install Nginx
@@ -233,8 +238,6 @@ sudo systemctl status nginx
 
 ## Updating the Application
 
-**Important**: Pushing to `master` does NOT automatically update your VPS. You need to manually update or set up auto-deployment.
-
 ### Manual Update
 
 ```bash
@@ -256,179 +259,12 @@ npm run build
 pm2 restart clover-dashboard
 ```
 
-### Auto-Deployment with GitHub Actions
-
-Set up automatic deployment when you push to master:
-
-1. **Create GitHub Actions workflow**:
-```bash
-mkdir -p .github/workflows
-nano .github/workflows/deploy.yml
-```
-
-Add this configuration:
-```yaml
-name: Deploy to VPS
-
-on:
-  push:
-    branches: [ master ]
-
-jobs:
-  deploy:
-    runs-on: ubuntu-latest
-    
-    steps:
-    - name: Deploy to server
-      uses: appleboy/ssh-action@master
-      with:
-        host: ${{ secrets.VPS_HOST }}
-        username: ${{ secrets.VPS_USER }}
-        key: ${{ secrets.VPS_SSH_KEY }}
-        script: |
-          cd ~/CloverDashboard
-          git pull origin master
-          npm install
-          npx prisma migrate deploy
-          npm run build
-          pm2 restart clover-dashboard
-```
-
-2. **Add GitHub Secrets**:
-   - Go to your GitHub repo → Settings → Secrets and variables → Actions
-   - Add these secrets:
-     - `VPS_HOST`: Your VPS IP or domain
-     - `VPS_USER`: Your SSH username (e.g., `clover`)
-     - `VPS_SSH_KEY`: Your private SSH key
-
-3. **Set up SSH key on VPS**:
-```bash
-# On your VPS, add the public key to authorized_keys
-mkdir -p ~/.ssh
-nano ~/.ssh/authorized_keys
-# Paste your public key here
-chmod 600 ~/.ssh/authorized_keys
-chmod 700 ~/.ssh
-```
-
-## Alternative: Using systemd Instead of PM2
-
-If you prefer systemd over PM2:
-
-1. **Create service file**:
-```bash
-sudo nano /etc/systemd/system/clover-dashboard.service
-```
-
-Add:
-```ini
-[Unit]
-Description=Clover Dashboard Next.js App
-After=network.target postgresql.service
-
-[Service]
-Type=simple
-User=clover
-WorkingDirectory=/home/clover/CloverDashboard
-Environment=NODE_ENV=production
-EnvironmentFile=/home/clover/CloverDashboard/.env
-ExecStart=/usr/bin/npm start
-Restart=always
-RestartSec=10
-
-[Install]
-WantedBy=multi-user.target
-```
-
-2. **Enable and start**:
-```bash
-sudo systemctl daemon-reload
-sudo systemctl enable clover-dashboard
-sudo systemctl start clover-dashboard
-sudo systemctl status clover-dashboard
-```
-
-## Backup Strategy
-
-1. **Database Backup Script**:
-```bash
-nano ~/backup-db.sh
-```
-
-Add:
-```bash
-#!/bin/bash
-BACKUP_DIR="/home/clover/backups"
-DATE=$(date +%Y%m%d_%H%M%S)
-mkdir -p $BACKUP_DIR
-
-pg_dump -U clover_user clover_dashboard > $BACKUP_DIR/db_backup_$DATE.sql
-
-# Keep only last 7 days
-find $BACKUP_DIR -name "db_backup_*.sql" -mtime +7 -delete
-```
-
-Make executable:
-```bash
-chmod +x ~/backup-db.sh
-```
-
-2. **Set up cron job for daily backups**:
-```bash
-crontab -e
-```
-
-Add:
-```
-0 2 * * * /home/clover/backup-db.sh
-```
-
-## Log Rotation
-
-Create log rotation config for PM2:
-```bash
-sudo nano /etc/logrotate.d/pm2
-```
-
-Add:
-```
-/home/clover/.pm2/logs/*.log {
-    daily
-    rotate 7
-    compress
-    delaycompress
-    missingok
-    notifempty
-    create 0640 clover clover
-}
-```
-
-## Monitoring
-
-1. **Install monitoring tools**:
-```bash
-# htop for system monitoring
-sudo apt install htop -y
-
-# Monitor disk usage
-df -h
-du -sh ~/CloverDashboard
-```
-
-2. **Set up uptime monitoring** (external service):
-   - UptimeRobot (free)
-   - Pingdom
-   - StatusCake
-
 ## Troubleshooting
 
 ### App won't start
 ```bash
 # Check PM2 logs
 pm2 logs clover-dashboard
-
-# Check systemd logs
-sudo journalctl -u clover-dashboard -f
 
 # Check if port is in use
 sudo lsof -i :3000
@@ -468,50 +304,18 @@ npm install
 - [ ] SSL certificate installed (Let's Encrypt)
 - [ ] Strong database password set
 - [ ] Environment variables secured (not in git)
-- [ ] Regular backups configured
-- [ ] System updates automated
 - [ ] SSH key authentication (disable password auth)
-- [ ] Fail2ban installed (optional but recommended)
-
-## Cost Estimate
-
-- **VPS**: $5-10/month (DigitalOcean, Linode, Vultr)
-- **Domain**: $10-15/year
-- **Total**: ~$5-10/month
-
-This is much cheaper than managed hosting platforms!
-
-## Environment Variables Reference
-
-| Variable | Description | Example |
-|----------|-------------|---------|
-| `DATABASE_URL` | PostgreSQL connection string | `postgresql://user:pass@host:5432/db` |
-| `CLOVER_MERCHANT_ID` | Your Clover merchant ID | `ABC123XYZ` |
-| `CLOVER_API_KEY` | Your Clover API key | `a1b2c3d4-e5f6-...` |
-| `NODE_ENV` | Environment mode | `production` |
+- [ ] Regular backups configured
 
 ## Post-Deployment Checklist
 
 - [ ] Verify all environment variables are set correctly
 - [ ] Run database migrations
 - [ ] Perform initial inventory sync
-- [ ] Test all filters and search
-- [ ] Test Add Inventory feature with CSV upload
+- [ ] Test all features including CSV upload
 - [ ] Set up SSL certificate (use Let's Encrypt)
-- [ ] Configure backup strategy for database
-- [ ] Set up monitoring (optional but recommended)
-- [ ] Test on mobile devices
 - [ ] Configure firewall rules
-- [ ] Set up log rotation
-
-## Support
-
-For deployment issues:
-1. Check error logs (PM2, Nginx, PostgreSQL)
-2. Verify environment variables
-3. Test database connection
-4. Check firewall rules
-5. Review this guide step-by-step
+- [ ] Test on mobile devices
 
 ---
 
