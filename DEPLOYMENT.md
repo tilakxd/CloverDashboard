@@ -182,8 +182,8 @@ server {
     # ----------------------------
     # Next.js Clover Dashboard at /dashboard
     # ----------------------------
-    location /dashboard/ {
-        proxy_pass http://127.0.0.1:4001/;  # Next.js app listening on port 4001
+    location /dashboard {
+        proxy_pass http://127.0.0.1:4001;  # Next.js app listening on port 4001 (no trailing slash to preserve /dashboard prefix)
         proxy_http_version 1.1;
 
         proxy_set_header Upgrade $http_upgrade;

@@ -8,7 +8,8 @@ import { ItemsTable, type ItemsTableRef } from "@/components/ItemsTable";
 import { AddInventoryModal } from "@/components/AddInventoryModal";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
-import { Plus } from "lucide-react";
+import { Plus, LogOut } from "lucide-react";
+import { useRouter } from "next/navigation";
 
 interface Category {
   id: string;
@@ -39,6 +40,7 @@ interface Tag {
 }
 
 export default function DashboardPage() {
+  const router = useRouter();
   const [categories, setCategories] = useState<Category[]>([]);
   const [tags, setTags] = useState<Tag[]>([]);
   const [stats, setStats] = useState<Stats>({
@@ -61,6 +63,18 @@ export default function DashboardPage() {
   });
   const [inventoryModalOpen, setInventoryModalOpen] = useState(false);
   const itemsTableRef = useRef<ItemsTableRef>(null);
+
+  const handleLogout = async () => {
+    try {
+      await fetch("/api/auth/logout", {
+        method: "POST",
+      });
+      router.push("/login");
+      router.refresh();
+    } catch (error) {
+      console.error("Logout error:", error);
+    }
+  };
 
   const fetchTags = async () => {
     try {
@@ -176,10 +190,16 @@ export default function DashboardPage() {
                 Manage your Clover inventory items
               </p>
             </div>
-            <Button onClick={() => setInventoryModalOpen(true)}>
-              <Plus className="mr-2 h-4 w-4" />
-              Add Inventory
-            </Button>
+            <div className="flex gap-2">
+              <Button onClick={() => setInventoryModalOpen(true)}>
+                <Plus className="mr-2 h-4 w-4" />
+                Add Inventory
+              </Button>
+              <Button variant="outline" onClick={handleLogout}>
+                <LogOut className="mr-2 h-4 w-4" />
+                Logout
+              </Button>
+            </div>
           </div>
 
           {/* Sync Status */}

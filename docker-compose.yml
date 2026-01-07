@@ -1,0 +1,58 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: clover-dashboard-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_DB: ${POSTGRES_DB:-clover_dashboard}
+    ports:
+      - "${POSTGRES_PORT:-5433}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - clover-network
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: clover-dashboard-app
+    restart: unless-stopped
+    ports:
+      - "${APP_PORT:-3000}:3000"
+    environment:
+      # Database
+      DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-clover_dashboard}?schema=public
+      
+      # Clover API
+      CLOVER_MERCHANT_ID: ${CLOVER_MERCHANT_ID}
+      CLOVER_API_KEY: ${CLOVER_API_KEY}
+      
+      # Authentication
+      DASHBOARD_PASSWORD: ${DASHBOARD_PASSWORD}
+      SESSION_SECRET: ${SESSION_SECRET:-change-me-in-production}
+      
+      # Node Environment
+      NODE_ENV: production
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - clover-network
+    command: sh -c "npx prisma migrate deploy && node server.js"
+
+volumes:
+  postgres_data:
+    driver: local
+
+networks:
+  clover-network:
+    driver: bridge
+
