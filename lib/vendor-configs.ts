@@ -43,6 +43,18 @@ const vendorCoreMark: VendorConfig = {
   },
 };
 
+const vendorWalmart: VendorConfig = {
+  name: "Vendor_Walmart",
+  displayName: "Walmart",
+  calculateStock: (row: Record<string, string>) => {
+    const status = (row.Status || row["Status"] || "").toLowerCase();
+    if (status !== "shopped") return 0;
+
+    const quantity = row.Quantity || row["Quantity"] || "0";
+    return parseInt(quantity, 10) || 0;
+  },
+};
+
 /**
  * Default vendor: Uses selected stock column
  * Note: For default vendor, the stock column name is passed as a special property
@@ -66,6 +78,7 @@ const defaultVendor: VendorConfig = {
 export const vendorConfigs: VendorConfig[] = [
   vendorKehe,
   vendorCoreMark,
+  vendorWalmart,
   defaultVendor,
 ];
 

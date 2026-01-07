@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { fuzzyMatchUPC } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
 
@@ -31,12 +32,10 @@ export async function POST(request: Request) {
     let missingItems: Array<{ id: string; name: string; sku: string | null }> = [];
 
     if (upcs && Array.isArray(upcs) && upcs.length > 0) {
-      // Find items by SKU/UPC that don't have the tag
-      const items = await prisma.inventoryItem.findMany({
+      // Fetch all items that don't have the tag, then use fuzzy matching
+      // This allows us to match UPCs even with formatting differences
+      const allItemsWithoutTag = await prisma.inventoryItem.findMany({
         where: {
-          sku: {
-            in: upcs,
-          },
           NOT: {
             tags: {
               has: tagId,
@@ -47,9 +46,45 @@ export async function POST(request: Request) {
           id: true,
           name: true,
           sku: true,
+          code: true,
         },
       });
-      missingItems = items;
+
+      // Use fuzzy matching to find items that match any of the provided UPCs
+      const matchedItems: Array<{ id: string; name: string; sku: string | null }> = [];
+      const matchedIds = new Set<string>();
+
+      for (const searchUPC of upcs) {
+        if (!searchUPC || !searchUPC.trim()) continue;
+
+        for (const item of allItemsWithoutTag) {
+          // Skip if already matched
+          if (matchedIds.has(item.id)) continue;
+
+          // Try fuzzy matching against SKU
+          if (fuzzyMatchUPC(item.sku, searchUPC)) {
+            matchedItems.push({
+              id: item.id,
+              name: item.name,
+              sku: item.sku,
+            });
+            matchedIds.add(item.id);
+            continue;
+          }
+
+          // Try fuzzy matching against code if SKU didn't match
+          if (fuzzyMatchUPC(item.code, searchUPC)) {
+            matchedItems.push({
+              id: item.id,
+              name: item.name,
+              sku: item.sku,
+            });
+            matchedIds.add(item.id);
+          }
+        }
+      }
+
+      missingItems = matchedItems;
     } else if (names && Array.isArray(names) && names.length > 0) {
       // Find items by name that don't have the tag
       // Use case-insensitive contains matching for each name

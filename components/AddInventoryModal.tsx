@@ -30,6 +30,7 @@ import {
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { vendorConfigs, getVendorConfig, type VendorConfig } from "@/lib/vendor-configs";
 import { Upload, Loader2, AlertCircle, CheckCircle2 } from "lucide-react";
+import { fuzzyMatchUPC } from "@/lib/utils";
 
 interface Tag {
   id: string;
@@ -332,8 +333,8 @@ export function AddInventoryModal({
 
       let item = items.find((item) => {
         if (referenceMethod === "upc") {
-          // First try matching against SKU
-          return item.sku?.trim() === searchValue;
+          // Use fuzzy matching for UPC/SKU
+          return fuzzyMatchUPC(item.sku, searchValue);
         } else {
           // Name matching - case insensitive, partial match
           return item.name.toLowerCase().includes(searchValue.toLowerCase()) ||
@@ -341,10 +342,10 @@ export function AddInventoryModal({
         }
       });
 
-      // If UPC didn't match SKU, try matching against code
+      // If UPC didn't match SKU, try fuzzy matching against code
       if (!item && referenceMethod === "upc") {
         item = items.find((item) => {
-          return item.code?.trim() === searchValue;
+          return fuzzyMatchUPC(item.code, searchValue);
         });
       }
 
