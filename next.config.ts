@@ -6,7 +6,7 @@ const nextConfig: NextConfig = {
   // Commented out for local development
   // basePath: '/dashboard',
   // assetPrefix: '/dashboard',
-  // output: 'standalone',
+  output: 'standalone',
 };
 
 export default nextConfig;
