@@ -41,10 +41,14 @@ export async function POST(request: NextRequest) {
     const sessionToken = createSession();
     const cookieStore = await cookies();
     
+    // Check if request is over HTTPS
+    const isSecure = request.url.startsWith("https://") || 
+                     request.headers.get("x-forwarded-proto") === "https";
+    
     // Set session cookie (24 hours)
     cookieStore.set("clover-dashboard-session", sessionToken, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
+      secure: isSecure, // Only use secure cookies over HTTPS
       sameSite: "lax",
       maxAge: 60 * 60 * 24, // 24 hours
       path: "/",

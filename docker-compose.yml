@@ -46,6 +46,13 @@ services:
         condition: service_healthy
     networks:
       - clover-network
+      - traefik
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.clover-dashboard.rule=Host(`dashboard.tilak.world`)"
+      - "traefik.http.routers.clover-dashboard.entrypoints=websecure"
+      - "traefik.http.routers.clover-dashboard.tls.certresolver=dns-cloudflare"
+      - "traefik.http.services.clover-dashboard.loadbalancer.server.port=3000"
     command: sh -c "npx prisma migrate deploy && node server.js"
 
 volumes:
@@ -55,4 +62,6 @@ volumes:
 networks:
   clover-network:
     driver: bridge
+  traefik:
+    external: true
 
