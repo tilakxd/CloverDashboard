@@ -148,31 +148,79 @@ sudo apt install nginx -y
 sudo nano /etc/nginx/sites-available/clover-dashboard
 ```
 
-Add the following configuration:
+Below is an example that matches your setup:
+- Main domain serves a **static landing page**
+- `https://your-domain.com/dashboard` serves the **Next.js Clover Dashboard** (running on port **4001**)
+- `https://your-domain.com/api` proxies to a **FastAPI backend** (port **8001**)
+- HTTP is redirected to HTTPS
+
+Replace `your-domain.com` with your real domain (e.g. `sunshinemarket.shop`), and adjust paths/ports as needed:
+
 ```nginx
+# ============================
+# HTTPS SERVER
+# ============================
+server {
+    listen 443 ssl;
+    server_name your-domain.com www.your-domain.com;
+
+    # SSL (managed by Certbot)
+    ssl_certificate /etc/letsencrypt/live/your-domain.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/your-domain.com/privkey.pem;
+    include /etc/letsencrypt/options-ssl-nginx.conf;
+    ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem;
+
+    # ----------------------------
+    # Static landing page (root site)
+    # ----------------------------
+    location / {
+        root /var/www/your_site_root;   # e.g. /var/www/sunshine_market/sunshine-market-web
+        index index.html;
+        try_files $uri /index.html;
+    }
+
+    # ----------------------------
+    # Next.js Clover Dashboard at /dashboard
+    # ----------------------------
+    location /dashboard/ {
+        proxy_pass http://127.0.0.1:4001/;  # Next.js app listening on port 4001
+        proxy_http_version 1.1;
+
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host $host;
+
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+
+        proxy_cache_bypass $http_upgrade;
+
+        # Increase body size for CSV uploads to the dashboard
+        client_max_body_size 10M;
+    }
+
+    # ----------------------------
+    # FastAPI backend at /api
+    # ----------------------------
+    location /api/ {
+        proxy_pass http://127.0.0.1:8001/;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+
+        client_max_body_size 50M;
+    }
+}
+
+# ============================
+# HTTP → HTTPS REDIRECT
+# ============================
 server {
     listen 80;
     server_name your-domain.com www.your-domain.com;
 
-    # Increase body size for CSV uploads
-    client_max_body_size 10M;
-
-    location / {
-        proxy_pass http://localhost:3000;
-        proxy_http_version 1.1;
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection 'upgrade';
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-        proxy_cache_bypass $http_upgrade;
-        
-        # Timeouts for long-running requests
-        proxy_connect_timeout 60s;
-        proxy_send_timeout 60s;
-        proxy_read_timeout 60s;
-    }
+    return 301 https://$host$request_uri;
 }
 ```
 
