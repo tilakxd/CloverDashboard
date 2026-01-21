@@ -315,7 +315,7 @@ export function FilterBar({ categories, tags, filters, onFilterChange }: FilterB
                   <SelectItem value="all">All Stock</SelectItem>
                   <SelectItem value="in-stock">In Stock</SelectItem>
                   <SelectItem value="low-stock">Low Stock</SelectItem>
-                  <SelectItem value="less-than-5">Less Than 5</SelectItem>
+                  <SelectItem value="less-than-3">Less Than 3</SelectItem>
                   <SelectItem value="out-of-stock">Out of Stock</SelectItem>
                 </SelectContent>
               </Select>

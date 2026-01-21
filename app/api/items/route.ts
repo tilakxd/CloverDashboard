@@ -39,8 +39,8 @@ export async function GET(request: Request) {
       where.stockCount = { gt: 10 };
     } else if (stockStatus === "low-stock") {
       where.stockCount = { gt: 0, lte: 10 };
-    } else if (stockStatus === "less-than-5") {
-      where.stockCount = { lt: 5 }; // Includes 0, 1, 2, 3, 4
+    } else if (stockStatus === "less-than-3") {
+      where.stockCount = { lt: 3 }; // Includes 0, 1, 2
     } else if (stockStatus === "out-of-stock") {
       where.stockCount = { lte: 0 };
     }
