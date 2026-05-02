@@ -10,6 +10,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
 import { formatCurrency, formatDate } from "@/lib/utils";
 
 export interface InventoryItem {
@@ -33,9 +34,17 @@ export interface InventoryItem {
 
 interface DataTableProps {
   items: InventoryItem[];
+  selectedIds?: Set<string>;
+  onToggleSelect?: (id: string) => void;
+  onToggleAll?: () => void;
 }
 
-export const DataTable = memo(function DataTable({ items }: DataTableProps) {
+export const DataTable = memo(function DataTable({
+  items,
+  selectedIds = new Set(),
+  onToggleSelect,
+  onToggleAll,
+}: DataTableProps) {
   const getStockBadge = (stockCount: number) => {
     if (stockCount <= 0) {
       return <Badge variant="destructive">Out of Stock</Badge>;
@@ -45,6 +54,9 @@ export const DataTable = memo(function DataTable({ items }: DataTableProps) {
       return <Badge className="bg-green-500 hover:bg-green-600">In Stock</Badge>;
     }
   };
+
+  const allSelected = items.length > 0 && items.every((i) => selectedIds.has(i.id));
+  const someSelected = items.some((i) => selectedIds.has(i.id));
 
   if (items.length === 0) {
     return (
@@ -62,6 +74,13 @@ export const DataTable = memo(function DataTable({ items }: DataTableProps) {
       <Table>
         <TableHeader>
           <TableRow>
+            <TableHead className="w-10">
+              <Checkbox
+                checked={allSelected ? true : someSelected ? "indeterminate" : false}
+                onCheckedChange={onToggleAll}
+                aria-label="Select all"
+              />
+            </TableHead>
             <TableHead>Name</TableHead>
             <TableHead>SKU</TableHead>
             <TableHead>Category</TableHead>
@@ -76,7 +95,18 @@ export const DataTable = memo(function DataTable({ items }: DataTableProps) {
         </TableHeader>
         <TableBody>
           {items.map((item) => (
-            <TableRow key={item.id}>
+            <TableRow
+              key={item.id}
+              data-state={selectedIds.has(item.id) ? "selected" : undefined}
+              className={selectedIds.has(item.id) ? "bg-blue-50 dark:bg-blue-950/20" : undefined}
+            >
+              <TableCell>
+                <Checkbox
+                  checked={selectedIds.has(item.id)}
+                  onCheckedChange={() => onToggleSelect?.(item.id)}
+                  aria-label={`Select ${item.name}`}
+                />
+              </TableCell>
               <TableCell className="font-medium">{item.name}</TableCell>
               <TableCell className="font-mono text-sm">
                 {item.sku || item.code || "-"}

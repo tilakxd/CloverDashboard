@@ -2,9 +2,10 @@
 
 import { useEffect, useState, useCallback, useImperativeHandle, forwardRef } from "react";
 import { DataTable, type InventoryItem } from "@/components/DataTable";
+import { PrintLabelsModal } from "@/components/PrintLabelsModal";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { ChevronLeft, ChevronRight, Printer, X } from "lucide-react";
 import { type FilterValues } from "@/components/FilterBar";
 
 interface ItemsTableProps {
@@ -44,6 +45,8 @@ export const ItemsTable = forwardRef<ItemsTableRef, ItemsTableProps>(function It
     lowStockCount: 0,
     outOfStockCount: 0,
   });
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [printModalOpen, setPrintModalOpen] = useState(false);
 
   const loadItems = useCallback(async () => {
     try {
@@ -91,12 +94,43 @@ export const ItemsTable = forwardRef<ItemsTableRef, ItemsTableProps>(function It
   // Reset to page 1 when filters change
   useEffect(() => {
     setPage(1);
+    setSelectedIds(new Set());
   }, [filters.search, filters.category, filters.stockStatus, filters.minPrice, filters.maxPrice, filters.available, filters.tag]);
 
   // Expose refresh function via ref
   useImperativeHandle(ref, () => ({
     refresh: loadItems,
   }), [loadItems]);
+
+  const handleToggleSelect = useCallback((id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+  }, []);
+
+  const handleToggleAll = useCallback(() => {
+    setSelectedIds((prev) => {
+      const allOnPage = items.map((i) => i.id);
+      const allSelected = allOnPage.every((id) => prev.has(id));
+      if (allSelected) {
+        const next = new Set(prev);
+        allOnPage.forEach((id) => next.delete(id));
+        return next;
+      } else {
+        const next = new Set(prev);
+        allOnPage.forEach((id) => next.add(id));
+        return next;
+      }
+    });
+  }, [items]);
+
+  const selectedItems = items.filter((i) => selectedIds.has(i.id));
 
   if (loading && items.length === 0) {
     return (
@@ -110,13 +144,44 @@ export const ItemsTable = forwardRef<ItemsTableRef, ItemsTableProps>(function It
 
   return (
     <>
+      {/* Selection action bar */}
+      {selectedIds.size > 0 && (
+        <div className="flex items-center justify-between rounded-lg border border-blue-200 bg-blue-50 dark:bg-blue-950/30 dark:border-blue-800 px-4 py-2.5 shadow-sm">
+          <span className="text-sm font-medium text-blue-700 dark:text-blue-400">
+            {selectedIds.size} item{selectedIds.size !== 1 ? "s" : ""} selected
+          </span>
+          <div className="flex items-center gap-2">
+            <Button
+              size="sm"
+              onClick={() => setPrintModalOpen(true)}
+            >
+              <Printer className="mr-2 h-4 w-4" />
+              Print Labels
+            </Button>
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => setSelectedIds(new Set())}
+              className="text-muted-foreground"
+            >
+              <X className="h-4 w-4" />
+            </Button>
+          </div>
+        </div>
+      )}
+
       <div className="rounded-lg bg-white dark:bg-slate-800 shadow-sm relative">
         {loading && items.length > 0 && (
           <div className="absolute inset-0 bg-white/50 dark:bg-slate-800/50 flex items-center justify-center z-10 rounded-lg">
             <div className="text-sm text-muted-foreground">Loading...</div>
           </div>
         )}
-        <DataTable items={items} />
+        <DataTable
+          items={items}
+          selectedIds={selectedIds}
+          onToggleSelect={handleToggleSelect}
+          onToggleAll={handleToggleAll}
+        />
       </div>
 
       {/* Pagination */}
@@ -165,6 +230,12 @@ export const ItemsTable = forwardRef<ItemsTableRef, ItemsTableProps>(function It
           <p>Showing {items.length} of {stats.totalItems} items</p>
         </div>
       )}
+
+      <PrintLabelsModal
+        open={printModalOpen}
+        onOpenChange={setPrintModalOpen}
+        selectedItems={selectedItems}
+      />
     </>
   );
 });
